@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIチャット</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="chat_container">
+        <!--ヘッダ-->
+        <div class="chat_header">
+            <span id="partner_name">お母さん</span>
+        </div>
+
+        <!--トーク履歴エリア-->
+        <div class="chat_messages" id="chat_messages"></div>
+
+        <!--入力バーエリア-->
+        <div class="chat_input_area">
+            <input type="text" id="user_input" placeholder="メッセージを入力..." autocomplete="off">
+            <button id="send_btn">送信</button>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
