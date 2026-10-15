@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Gmai: ビルド＆アプリフォルダ自動配置",
+            "type": "shell",
+            "command": "g++ -std=c++17 -mwindows -static -static-libgcc -static-libstdc++ src/main.cpp -Isrc -lwininet -lole32 -o main.exe && New-Item -ItemType Directory -Force -Path 'Gmail_App/ui' | Out-Null && Copy-Item 'main.exe' -Destination 'Gmail_App' && Copy-Item 'src/webview2/WebView2Loader.dll' -Destination 'Gmail_App' && Copy-Item '.env' -Destination 'Gmail_App' && Copy-Item 'ui/*' -Destination 'Gmail_App/ui' -Recurse -Force && Write-Host '✨ ビルドと Gmail_App フォルダの更新が完了しました！' -ForegroundColor Green",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}
+
