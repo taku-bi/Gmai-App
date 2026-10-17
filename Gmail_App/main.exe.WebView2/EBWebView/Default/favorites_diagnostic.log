@@ -64,3 +64,63 @@
 2026-10-15 09:43:41.700: [INFO] BookmarksLoadDropped droppedNodes=0
 2026-10-15 09:43:41.700: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
 2026-10-15 09:58:03.550: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-15 10:09:06.611: [INFO] CurrentProfilePath: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-15 10:09:06.611: [INFO] Profiles total count: 1
+2026-10-15 10:09:06.611: [INFO] Profile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-15T09:43:48.253Z
+2026-10-15 10:09:06.611: [INFO] LastUsedProfileDir: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-15 10:09:06.611: [INFO] MostRecentlyActiveProfile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-15T09:43:48.253Z
+2026-10-15 10:09:06.611: [INFO] OnDoneLoading sync enabled: 0
+2026-10-15 10:09:06.611: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-15 10:09:06.611: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-15 10:09:06.611: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-15 11:07:35.098: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:09:04.823: [INFO] CurrentProfilePath: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:09:04.823: [INFO] Profiles total count: 1
+2026-10-17 07:09:04.824: [INFO] Profile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-15T10:10:17.950Z
+2026-10-17 07:09:04.824: [INFO] LastUsedProfileDir: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:09:04.824: [INFO] MostRecentlyActiveProfile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-15T10:10:17.950Z
+2026-10-17 07:09:04.824: [INFO] OnDoneLoading sync enabled: 0
+2026-10-17 07:09:04.824: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-17 07:09:04.824: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-17 07:09:04.824: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:11:52.885: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:18:28.193: [INFO] CurrentProfilePath: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:18:28.193: [INFO] Profiles total count: 1
+2026-10-17 07:18:28.194: [INFO] Profile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:09:08.894Z
+2026-10-17 07:18:28.194: [INFO] LastUsedProfileDir: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:18:28.194: [INFO] MostRecentlyActiveProfile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:09:08.894Z
+2026-10-17 07:18:28.194: [INFO] OnDoneLoading sync enabled: 0
+2026-10-17 07:18:28.194: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-17 07:18:28.194: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-17 07:18:28.194: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:21:30.534: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:23:25.024: [INFO] CurrentProfilePath: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:23:25.024: [INFO] Profiles total count: 1
+2026-10-17 07:23:25.024: [INFO] Profile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:18:29.962Z
+2026-10-17 07:23:25.024: [INFO] LastUsedProfileDir: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:23:25.024: [INFO] MostRecentlyActiveProfile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:18:29.962Z
+2026-10-17 07:23:25.024: [INFO] OnDoneLoading sync enabled: 0
+2026-10-17 07:23:25.024: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-17 07:23:25.024: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-17 07:23:25.024: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:24:53.787: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:25:19.100: [INFO] CurrentProfilePath: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:25:19.100: [INFO] Profiles total count: 1
+2026-10-17 07:25:19.100: [INFO] Profile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:23:26.556Z
+2026-10-17 07:25:19.100: [INFO] LastUsedProfileDir: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:25:19.100: [INFO] MostRecentlyActiveProfile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:23:26.556Z
+2026-10-17 07:25:19.100: [INFO] OnDoneLoading sync enabled: 0
+2026-10-17 07:25:19.100: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-17 07:25:19.100: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-17 07:25:19.100: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:25:30.915: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:28:53.574: [INFO] CurrentProfilePath: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:28:53.574: [INFO] Profiles total count: 1
+2026-10-17 07:28:53.574: [INFO] Profile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:25:20.239Z
+2026-10-17 07:28:53.574: [INFO] LastUsedProfileDir: C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default
+2026-10-17 07:28:53.574: [INFO] MostRecentlyActiveProfile: name=プロファイル 1 path=C:\Users\mimut\Desktop\プロジェクトフォルダ\Gmail_App\main.exe.WebView2\EBWebView\Default lastActive=2026-10-17T07:25:20.239Z
+2026-10-17 07:28:53.574: [INFO] OnDoneLoading sync enabled: 0
+2026-10-17 07:28:53.574: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-17 07:28:53.574: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-17 07:28:53.574: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-17 07:29:05.714: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1

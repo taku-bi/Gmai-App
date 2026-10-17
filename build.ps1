@@ -1,6 +1,6 @@
 Write-Host "Building main.exe..." -ForegroundColor Cyan
 
-g++ -std=c++17 -mwindows -static -static-libgcc -static-libstdc++ src/main.cpp -Isrc -lwininet -lole32 -o main.exe
+g++ -std=c++17 -mwindows -static -static-libgcc -static-libstdc++ src/main.cpp -Isrc -lwininet -lole32 -loleaut32 -luuid -o main.exe
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed." -ForegroundColor Red

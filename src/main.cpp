@@ -6,7 +6,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <wininet.h>
-#include <wrl.h>
+#include <oleauto.h>
 
 // WebView2 SDK ヘッダー
 #include "webview2/WebView2.h"
@@ -14,14 +14,10 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <vector>
-#include <filesystem>
 #include <algorithm>
 #include <thread>
 
 #pragma comment(lib, "wininet.lib")
-
-using namespace Microsoft::WRL;
 
 // ============================================================
 //  カスタムウィンドウメッセージ（ワーカースレッド → UIスレッドへの通知用）
@@ -42,7 +38,7 @@ static ICoreWebView2*           g_webview    = nullptr;
 static ICoreWebView2Controller* g_controller = nullptr;
 
 // ------------------------------------------------------------
-// ★【APIキー変数】
+// ★【APIキー変数】★★★
 // Google_API_Key の中身は実行時に .env から読み込まれます。
 // コード内にキー文字列を直接代入・ハードコードしません。
 // ------------------------------------------------------------
@@ -50,7 +46,8 @@ static std::string Google_API_Key;
 
 static std::string g_systemInstruction;
 static std::string g_familyContext;
-static std::string g_exePath;   // exe のあるディレクトリ
+static std::string g_exePath;   // exe のあるディレクトリ（Shift_JIS）
+static std::string g_historyPath;
 
 // ============================================================
 //  ユーティリティ: exe のディレクトリパスを取得
@@ -91,16 +88,6 @@ std::string wideToUtf8(const std::wstring& ws) {
     return s;
 }
 
-// 文字列置換ユーティリティ
-std::string replaceAll(std::string str, const std::string& from, const std::string& to) {
-    size_t start_pos = 0;
-    while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
-        str.replace(start_pos, from.length(), to);
-        start_pos += to.length();
-    }
-    return str;
-}
-
 // ============================================================
 //  1️⃣ .env ファイルの読み込み（実行時に外部ファイルから取得）
 // ============================================================
@@ -125,12 +112,14 @@ void loadEnv(const std::string& path) {
         std::string key   = line.substr(0, pos);
         std::string value = line.substr(pos + 1);
 
+        // クォートの除去
         if (value.size() >= 2 &&
             ((value.front() == '"'  && value.back() == '"') ||
              (value.front() == '\'' && value.back() == '\''))) {
             value = value.substr(1, value.size() - 2);
         }
 
+        // \n エスケープシーケンスの展開
         std::string expanded;
         for (size_t i = 0; i < value.size(); ++i) {
             if (value[i] == '\\' && i + 1 < value.size() && value[i + 1] == 'n') {
@@ -179,6 +168,7 @@ void writeHistory(const std::string& path, const std::string& json) {
     file << json;
 }
 
+// JSON文字列エスケープ
 std::string jsonEscape(const std::string& s) {
     std::string out;
     out.reserve(s.size() + 32);
@@ -195,12 +185,12 @@ std::string jsonEscape(const std::string& s) {
     return out;
 }
 
+// Gemini API リクエストJSON構築
 std::string buildRequestJson(const std::string& userMessage, const std::string& historyPath) {
     std::string history = readHistory(historyPath);
     std::ostringstream json;
     json << "{\n";
 
-    // system_instruction がある場合のみ追加（空だと400エラーになるのを防ぐ）
     if (!g_systemInstruction.empty()) {
         json << "  \"system_instruction\": {\n";
         json << "    \"parts\": [{\"text\": \"" << jsonEscape(g_systemInstruction) << "\"}]\n";
@@ -210,14 +200,12 @@ std::string buildRequestJson(const std::string& userMessage, const std::string& 
     json << "  \"contents\": [\n";
 
     bool hasItem = false;
-    // familyContext がある場合のみ最初に追加
     if (!g_familyContext.empty()) {
         json << "    {\"role\": \"user\",  \"parts\": [{\"text\": \"" << jsonEscape(g_familyContext) << "\"}]},\n";
         json << "    {\"role\": \"model\", \"parts\": [{\"text\": \"わかりました。\"}]}";
         hasItem = true;
     }
 
-    // 過去履歴
     if (history.size() > 2) {
         std::string inner = history.substr(1, history.size() - 2);
         while (!inner.empty() && std::isspace((unsigned char)inner.front())) inner.erase(inner.begin());
@@ -229,7 +217,6 @@ std::string buildRequestJson(const std::string& userMessage, const std::string& 
         }
     }
 
-    // 今回のユーザーメッセージ
     if (hasItem) json << ",\n";
     json << "    {\"role\": \"user\", \"parts\": [{\"text\": \"" << jsonEscape(userMessage) << "\"}]}\n";
     json << "  ]\n";
@@ -241,197 +228,248 @@ std::string buildRequestJson(const std::string& userMessage, const std::string& 
 //  3️⃣ Gemini API 呼び出し（WinINet HTTPS POST）
 // ============================================================
 std::string callGeminiApi(const std::string& requestBody) {
-    // ------------------------------------------------------------
-    // ★★★【Google_API_Key の使用箇所】★★★
-    // ------------------------------------------------------------
     if (Google_API_Key.empty()) {
-        return "エラー: .env から APIキー (Google_API_Key) が読み込めていません。\n.env に Google_API_Key=... が正しく設定されているか確認してください。";
+        return "エラー: .env から APIキー (Google_API_Key) が読み込めませんでした。";
     }
 
-    const std::string host = "generativelanguage.googleapis.com";
-    std::string url_path = "/v1beta/models/gemini-2.0-flash:generateContent?key=" + Google_API_Key;
-    std::string url_path = "/v1beta/models/gemini-3.8-flash:generateContent?key=" + Google_API_Key;
-    std::string response_data = "";
+    // ★ Google API推奨の gemini-3.8-flash モデルを使用
+    std::string path = "/v1beta/models/gemini-3.8-flash:generateContent?key=" + Google_API_Key;
 
-    HINTERNET hInternet = InternetOpenA("ParentAIChat", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-    if (hInternet) {
-        HINTERNET hConnect = InternetConnectA(hInternet, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
-        if (hConnect) {
-            DWORD flags = INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE;
-            HINTERNET hRequest = HttpOpenRequestA(hConnect, "POST", url_path.c_str(), NULL, NULL, NULL, flags, 0);
-            if (hRequest) {
-                std::string headers = "Content-Type: application/json\r\n";
-                if (HttpSendRequestA(hRequest, headers.c_str(), (DWORD)headers.length(), (LPVOID)requestBody.c_str(), (DWORD)requestBody.length())) {
-                    char buffer[4096];
-                    DWORD bytesRead = 0;
-                    while (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead > 0) {
-                        buffer[bytesRead] = '\0';
-                        response_data += buffer;
-                    }
-                }
-                InternetCloseHandle(hRequest);
+    HINTERNET hSession = InternetOpenA("GeminiChatApp", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+    if (!hSession) return "エラー: インターネットセッションの初期化に失敗しました。";
+
+    // ★ 修正: サーバー名を正しく指定
+    HINTERNET hConnect = InternetConnectA(hSession, "generativelanguage.googleapis.com",
+        INTERNET_DEFAULT_HTTPS_PORT, nullptr, nullptr, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) {
+        InternetCloseHandle(hSession);
+        return "エラー: サーバーへの接続に失敗しました。";
+    }
+
+    HINTERNET hRequest = HttpOpenRequestA(hConnect, "POST", path.c_str(), nullptr, nullptr, nullptr,
+        INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD, 0);
+    if (!hRequest) {
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hSession);
+        return "エラー: リクエストの作成に失敗しました。";
+    }
+
+    std::string headers = "Content-Type: application/json\r\n";
+    BOOL bSend = HttpSendRequestA(hRequest, headers.c_str(), (DWORD)headers.length(),
+        (LPVOID)requestBody.c_str(), (DWORD)requestBody.length());
+
+    std::string responseData;
+    if (bSend) {
+        char buf[4096];
+        DWORD bytesRead = 0;
+        while (InternetReadFile(hRequest, buf, sizeof(buf), &bytesRead) && bytesRead > 0) {
+            responseData.append(buf, bytesRead);
+        }
+    } else {
+        responseData = "エラー: APIへのリクエスト送信に失敗しました。";
+    }
+
+    InternetCloseHandle(hRequest);
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hSession);
+
+    return responseData;
+}
+
+// ============================================================
+//  APIレスポンスからテキスト部分を抽出
+// ============================================================
+std::string extractReplyText(const std::string& raw) {
+    // "text": "..." の最初の出現を探す（簡易パーサー）
+    std::string marker = "\"text\": \"";
+    auto pos = raw.find(marker);
+    if (pos == std::string::npos) {
+        marker = "\"text\":\"";
+        pos = raw.find(marker);
+    }
+    if (pos == std::string::npos) {
+        // エラーメッセージを探す
+        std::string errMarker = "\"message\": \"";
+        auto errPos = raw.find(errMarker);
+        if (errPos == std::string::npos) {
+            errMarker = "\"message\":\"";
+            errPos = raw.find(errMarker);
+        }
+        if (errPos != std::string::npos) {
+            size_t start = errPos + errMarker.size();
+            size_t end = raw.find("\"", start);
+            if (end != std::string::npos) {
+                return "Google API エラー: " + raw.substr(start, end - start);
             }
-            InternetCloseHandle(hConnect);
         }
-        InternetCloseHandle(hInternet);
+        return "エラー: APIからの応答を解析できませんでした。";
     }
 
-    if (response_data.empty()) {
-        return "エラー: Google サーバーとの通信に失敗しました。インターネット接続を確認してください。";
-    }
-
-    // JSONから正常返答テキスト（"text": "..."）を抽出
-    size_t text_pos = response_data.find("\"text\": \"");
-    if (text_pos != std::string::npos) {
-        size_t start = text_pos + 9;
-        size_t end = response_data.find("\"", start);
-        if (end != std::string::npos) {
-            std::string reply = response_data.substr(start, end - start);
-            reply = replaceAll(reply, "\\n", "\n");
-            reply = replaceAll(reply, "\\\"", "\"");
-            return reply;
-        }
-    }
-
-    // Googleからのエラーレスポンス内容（message）を抽出して画面に表示
-    size_t msg_pos = response_data.find("\"message\": \"");
-    if (msg_pos != std::string::npos) {
-        size_t start = msg_pos + 12;
-        size_t end = response_data.find("\"", start);
-        if (end != std::string::npos) {
-            std::string err = response_data.substr(start, end - start);
-            err = replaceAll(err, "\\n", "\n");
-            return "Google API エラー: " + err;
+    size_t start = pos + marker.size();
+    std::string result;
+    for (size_t i = start; i < raw.size(); ++i) {
+        if (raw[i] == '\\' && i + 1 < raw.size()) {
+            char next = raw[i + 1];
+            if (next == '"') { result += '"'; ++i; }
+            else if (next == 'n') { result += '\n'; ++i; }
+            else if (next == 'r') { result += '\r'; ++i; }
+            else if (next == 't') { result += '\t'; ++i; }
+            else if (next == '\\') { result += '\\'; ++i; }
+            else { result += raw[i]; }
+        } else if (raw[i] == '"') {
+            break;
+        } else {
+            result += raw[i];
         }
     }
-
-    return "API返答: " + response_data;
+    return result;
 }
 
-// 履歴の上書き蓄積
-void appendToHistory(const std::string& user_msg, const std::string& ai_reply, const std::string& path) {
-    std::string history = readHistory(path);
-    if (history.size() < 2) history = "[]";
-    std::string contents = history.substr(0, history.length() - 1);
-    while (!contents.empty() && (contents.back() == ' ' || contents.back() == '\n' || contents.back() == '\r')) {
-        contents.pop_back();
+// ============================================================
+//  会話履歴の更新
+// ============================================================
+void appendToHistory(const std::string& historyPath, const std::string& userMsg, const std::string& botReply) {
+    std::string history = readHistory(historyPath);
+    // 末尾の ] を除去
+    if (history.size() >= 1 && history.back() == ']') {
+        history.pop_back();
     }
-    if (contents.length() > 1 && contents.back() != '[') contents += ",";
+    while (!history.empty() && std::isspace((unsigned char)history.back())) {
+        history.pop_back();
+    }
 
-    contents += "{\"role\": \"user\", \"parts\": [{\"text\": \"" + jsonEscape(user_msg) + "\"}]},"
-                "{\"role\": \"model\", \"parts\": [{\"text\": \"" + jsonEscape(ai_reply) + "\"}]}]";
-    writeHistory(path, contents);
+    std::ostringstream entry;
+    bool isEmpty = (history == "[" || history.empty());
+    if (!isEmpty) {
+        entry << ",\n";
+    }
+    entry << "    {\"role\": \"user\",  \"parts\": [{\"text\": \"" << jsonEscape(userMsg) << "\"}]},\n";
+    entry << "    {\"role\": \"model\", \"parts\": [{\"text\": \"" << jsonEscape(botReply) << "\"}]}\n";
+    entry << "]";
+
+    if (history.empty()) history = "[";
+    writeHistory(historyPath, history + entry.str());
 }
 
-// 4️⃣ UIスレッドをフリーズさせないための非同期バックグラウンド処理（ワーカースレッド）
-void geminiThreadWorker(ThreadData* data) {
-    std::string ai_reply = callGeminiApi(data->requestJson);
-    appendToHistory(data->userMessage, ai_reply, g_exePath + "history.json");
+// ============================================================
+//  ワーカースレッド関数
+// ============================================================
+void GeminiThreadProc(ThreadData* data) {
+    std::string rawResponse = callGeminiApi(data->requestJson);
+    std::string replyText = extractReplyText(rawResponse);
 
-    // UIスレッドへ返答を通知
-    std::wstring* wreply = new std::wstring(utf8ToWide(ai_reply));
-    PostMessage(g_hwnd, WM_GEMINI_REPLY, 0, reinterpret_cast<LPARAM>(wreply));
+    // 会話履歴に追加
+    appendToHistory(g_historyPath, data->userMessage, replyText);
+
+    // UIスレッドに返信テキストを送る
+    BSTR bstrResponse = SysAllocString(utf8ToWide(replyText).c_str());
+    PostMessage(g_hwnd, WM_GEMINI_REPLY, (WPARAM)bstrResponse, 0);
+
     delete data;
 }
 
-void onUserMessage(const std::wstring& message) {
-    std::string userText = wideToUtf8(message);
-    std::string historyPath = g_exePath + "history.json";
-    std::string reqJson = buildRequestJson(userText, historyPath);
-
-    ThreadData* data = new ThreadData{ userText, reqJson };
-    std::thread t(geminiThreadWorker, data);
-    t.detach();
-}
-
 // ============================================================
-//  WebView2 コールバック用 COM ハンドラー（MinGW / g++ 完全対応）
+//  COM コールバックハンドラ（MinGW互換）
+//  Microsoft::WRL::Callback はMinGWで使えないので手動実装
 // ============================================================
 
-// 1. メッセージ受信ハンドラー
+// --- WebMessageReceived ハンドラ ---
 class WebMessageReceivedHandler : public ICoreWebView2WebMessageReceivedEventHandler {
-    ULONG m_ref = 1;
+    ULONG m_refCount = 1;
 public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void** ppv) override {
-        if (!ppv) return E_POINTER;
-        *ppv = this;
+        *ppv = static_cast<IUnknown*>(this);
         AddRef();
         return S_OK;
     }
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_refCount; }
     ULONG STDMETHODCALLTYPE Release() override {
-        if (--m_ref == 0) { delete this; return 0; }
-        return m_ref;
+        ULONG r = --m_refCount;
+        if (r == 0) delete this;
+        return r;
     }
-    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) override {
-        LPWSTR msg = nullptr;
-        args->TryGetWebMessageAsString(&msg);
-        if (msg) {
-            std::wstring message(msg);
-            CoTaskMemFree(msg);
-            onUserMessage(message);
+    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) override {
+        LPWSTR msgRaw = nullptr;
+        args->TryGetWebMessageAsString(&msgRaw);
+        if (msgRaw) {
+            std::string userMsg = wideToUtf8(msgRaw);
+            CoTaskMemFree(msgRaw);
+
+            // リクエストJSON構築
+            std::string reqJson = buildRequestJson(userMsg, g_historyPath);
+
+            // ワーカースレッドでAPI呼び出し
+            ThreadData* td = new ThreadData();
+            td->userMessage = userMsg;
+            td->requestJson = reqJson;
+            std::thread(GeminiThreadProc, td).detach();
         }
         return S_OK;
     }
 };
 
-// 2. コントローラー作成完了ハンドラー
+// --- CreateCoreWebView2Controller 完了ハンドラ ---
 class ControllerCompletedHandler : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler {
-    ULONG m_ref = 1;
+    ULONG m_refCount = 1;
 public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void** ppv) override {
-        if (!ppv) return E_POINTER;
-        *ppv = this;
+        *ppv = static_cast<IUnknown*>(this);
         AddRef();
         return S_OK;
     }
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_refCount; }
     ULONG STDMETHODCALLTYPE Release() override {
-        if (--m_ref == 0) { delete this; return 0; }
-        return m_ref;
+        ULONG r = --m_refCount;
+        if (r == 0) delete this;
+        return r;
     }
-    HRESULT STDMETHODCALLTYPE Invoke(HRESULT hr, ICoreWebView2Controller* controller) override {
-        if (FAILED(hr)) return hr;
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Controller* controller) override {
+        if (FAILED(result) || !controller) {
+            MessageBoxA(g_hwnd, "WebView2 コントローラーの作成に失敗しました。", "エラー", MB_OK | MB_ICONERROR);
+            return S_OK;
+        }
+
         g_controller = controller;
         g_controller->AddRef();
+
         g_controller->get_CoreWebView2(&g_webview);
 
+        // ウィンドウサイズに合わせる
         RECT bounds;
         GetClientRect(g_hwnd, &bounds);
         g_controller->put_Bounds(bounds);
 
-        std::wstring htmlPath = getExeDirW() + L"ui\\index.html";
-        std::wstring url = L"file:///" + htmlPath;
-        std::replace(url.begin(), url.end(), L'\\', L'/');
-        g_webview->Navigate(url.c_str());
-
+        // メッセージ受信ハンドラを登録
         EventRegistrationToken token;
         g_webview->add_WebMessageReceived(new WebMessageReceivedHandler(), &token);
+
+        // index.html をロード（Unicode パスで日本語フォルダ対応）
+        std::wstring htmlPath = getExeDirW() + L"ui\\index.html";
+        g_webview->Navigate(htmlPath.c_str());
+
         return S_OK;
     }
 };
 
-// 3. 環境作成完了ハンドラー
+// --- CreateCoreWebView2Environment 完了ハンドラ ---
 class EnvironmentCompletedHandler : public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler {
-    ULONG m_ref = 1;
+    ULONG m_refCount = 1;
 public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void** ppv) override {
-        if (!ppv) return E_POINTER;
-        *ppv = this;
+        *ppv = static_cast<IUnknown*>(this);
         AddRef();
         return S_OK;
     }
-    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++m_refCount; }
     ULONG STDMETHODCALLTYPE Release() override {
-        if (--m_ref == 0) { delete this; return 0; }
-        return m_ref;
+        ULONG r = --m_refCount;
+        if (r == 0) delete this;
+        return r;
     }
-    HRESULT STDMETHODCALLTYPE Invoke(HRESULT hr, ICoreWebView2Environment* env) override {
-        if (FAILED(hr)) {
-            char buf[128];
-            wsprintfA(buf, "WebView2環境作成失敗: HRESULT = 0x%08X", (unsigned int)hr);
-            MessageBoxA(g_hwnd, buf, "エラー", MB_OK | MB_ICONERROR);
-            return hr;
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT result, ICoreWebView2Environment* env) override {
+        if (FAILED(result) || !env) {
+            MessageBoxA(g_hwnd, "WebView2 環境の作成に失敗しました。", "エラー", MB_OK | MB_ICONERROR);
+            return S_OK;
         }
         env->CreateCoreWebView2Controller(g_hwnd, new ControllerCompletedHandler());
         return S_OK;
@@ -439,125 +477,143 @@ public:
 };
 
 // ============================================================
-//  WebView2 の初期化（動的ロード方式：MinGW環境で100%確実に動作）
+//  ウィンドウプロシージャ
 // ============================================================
-typedef HRESULT (STDAPICALLTYPE *CreateCoreWebView2EnvironmentWithOptionsFn)(
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_SIZE:
+        if (g_controller) {
+            RECT bounds;
+            GetClientRect(hwnd, &bounds);
+            g_controller->put_Bounds(bounds);
+        }
+        return 0;
+
+    case WM_GEMINI_REPLY: {
+        BSTR bstr = (BSTR)wp;
+        if (bstr && g_webview) {
+            // JavaScript で bot の吹き出しを表示
+            std::wstring reply(bstr, SysStringLen(bstr));
+
+            // JS文字列用にエスケープ
+            std::wstring escaped;
+            for (wchar_t ch : reply) {
+                if (ch == L'\\') escaped += L"\\\\";
+                else if (ch == L'\'') escaped += L"\\'";
+                else if (ch == L'\n') escaped += L"\\n";
+                else if (ch == L'\r') escaped += L"\\r";
+                else escaped += ch;
+            }
+
+            std::wstring js = L"addMessage('" + escaped + L"', 'bot');";
+            g_webview->ExecuteScript(js.c_str(), nullptr);
+        }
+        if (bstr) SysFreeString(bstr);
+        return 0;
+    }
+
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+// ============================================================
+//  WebView2 初期化（DLL動的ロード — MinGWでは.libリンク不可のため）
+// ============================================================
+typedef HRESULT(STDAPICALLTYPE* FnCreateCoreWebView2EnvironmentWithOptions)(
     PCWSTR browserExecutableFolder,
     PCWSTR userDataFolder,
     ICoreWebView2EnvironmentOptions* environmentOptions,
-    ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* environment_created_handler
-);
+    ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* environmentCreatedHandler);
 
-void initWebView2() {
-    std::string dllPath = g_exePath + "WebView2Loader.dll";
-    HMODULE hDll = LoadLibraryA(dllPath.c_str());
-    if (!hDll) {
-        hDll = LoadLibraryA("WebView2Loader.dll");
-    }
-    if (!hDll) {
-        MessageBoxA(g_hwnd, "WebView2Loader.dll の読み込みに失敗しました。\nexe と同じフォルダに WebView2Loader.dll が配置されているか確認してください。", "エラー", MB_OK | MB_ICONERROR);
-        return;
+bool InitWebView2() {
+    HMODULE hLib = LoadLibraryA("WebView2Loader.dll");
+    if (!hLib) {
+        MessageBoxA(g_hwnd,
+            "WebView2Loader.dll が見つかりません。\n"
+            "exe と同じフォルダに配置してください。",
+            "エラー", MB_OK | MB_ICONERROR);
+        return false;
     }
 
-    auto pfnCreate = (CreateCoreWebView2EnvironmentWithOptionsFn)GetProcAddress(hDll, "CreateCoreWebView2EnvironmentWithOptions");
-    if (!pfnCreate) {
-        MessageBoxA(g_hwnd, "WebView2Loader.dll 内の関数読み込みに失敗しました。", "エラー", MB_OK | MB_ICONERROR);
-        return;
+    auto fnCreate = (FnCreateCoreWebView2EnvironmentWithOptions)
+        GetProcAddress(hLib, "CreateCoreWebView2EnvironmentWithOptions");
+
+    if (!fnCreate) {
+        MessageBoxA(g_hwnd, "CreateCoreWebView2EnvironmentWithOptions が見つかりません。", "エラー", MB_OK | MB_ICONERROR);
+        return false;
     }
 
-    HRESULT hr = pfnCreate(
-        nullptr, nullptr, nullptr,
-        new EnvironmentCompletedHandler()
-    );
-    if (FAILED(hr)) {
-        char buf[128];
-        wsprintfA(buf, "WebView2の初期化に失敗しました: HRESULT = 0x%08X", (unsigned int)hr);
-        MessageBoxA(g_hwnd, buf, "初期化エラー", MB_OK | MB_ICONERROR);
-    }
+    HRESULT hr = fnCreate(nullptr, nullptr, nullptr, new EnvironmentCompletedHandler());
+    return SUCCEEDED(hr);
 }
 
 // ============================================================
-//  ウィンドウプロシージャ
-// ============================================================
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-        case WM_SIZE:
-            if (g_controller) {
-                RECT bounds;
-                GetClientRect(hwnd, &bounds);
-                g_controller->put_Bounds(bounds);
-            }
-            return 0;
-
-        case WM_GEMINI_REPLY: {
-            std::wstring* reply = reinterpret_cast<std::wstring*>(lParam);
-            if (g_webview && reply) {
-                g_webview->PostWebMessageAsString(reply->c_str());
-            }
-            delete reply;
-            return 0;
-        }
-
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            return 0;
-    }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
-}
-
-// ============================================================
-//  エントリーポイント
+//  WinMain — エントリーポイント
 // ============================================================
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     try {
+        // COM 初期化
         CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+        // exe のあるディレクトリを取得
         g_exePath = getExeDir();
+        g_historyPath = g_exePath + "history.json";
 
+        // .env 読み込み ★★★
         loadEnv(g_exePath + ".env");
-        resetHistory(g_exePath + "history.json");
 
-        WNDCLASSEXW wc = {};
-        wc.cbSize        = sizeof(WNDCLASSEXW);
+        // 会話履歴リセット（起動毎にクリア）
+        resetHistory(g_historyPath);
+
+        // ウィンドウクラス登録
+        const wchar_t CLASS_NAME[] = L"GmaiChatWindow";
+        WNDCLASSW wc = {};
         wc.lpfnWndProc   = WndProc;
-        wc.hInstance     = hInstance;
-        wc.lpszClassName = L"GmaiAppClass";
-        wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-        RegisterClassExW(&wc);
+        wc.hInstance      = hInstance;
+        wc.lpszClassName  = CLASS_NAME;
+        wc.hCursor        = LoadCursor(nullptr, IDC_ARROW);
+        wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
+        RegisterClassW(&wc);
 
+        // ウィンドウ作成
         g_hwnd = CreateWindowExW(
-            0, L"GmaiAppClass", L"Gmai - AIチャット",
+            0, CLASS_NAME,
+            L"Gmai  AIチャット",
             WS_OVERLAPPEDWINDOW,
-            CW_USEDEFAULT, CW_USEDEFAULT, 480, 800,
+            CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
             nullptr, nullptr, hInstance, nullptr);
+
         if (!g_hwnd) {
-            MessageBoxA(nullptr, "ウィンドウ作成に失敗しました。", "エラー", MB_OK | MB_ICONERROR);
-            return 0;
+            MessageBoxA(nullptr, "ウィンドウの作成に失敗しました。", "エラー", MB_OK | MB_ICONERROR);
+            return 1;
         }
-        ShowWindow(g_hwnd, SW_SHOWNORMAL);
+
+        ShowWindow(g_hwnd, nCmdShow);
         UpdateWindow(g_hwnd);
 
-        initWebView2();
-
-        MSG winMsg;
-        while (GetMessage(&winMsg, nullptr, 0, 0)) {
-            TranslateMessage(&winMsg);
-            DispatchMessage(&winMsg);
+        // WebView2 初期化
+        if (!InitWebView2()) {
+            MessageBoxA(nullptr, "WebView2 の初期化に失敗しました。", "エラー", MB_OK | MB_ICONERROR);
+            return 1;
         }
 
-        if (g_webview)    g_webview->Release();
-        if (g_controller) g_controller->Release();
-        CoUninitialize();
+        // メッセージループ
+        MSG msg;
+        while (GetMessage(&msg, nullptr, 0, 0)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
 
-        return (int)winMsg.wParam;
-    }
-    catch (const std::exception& ex) {
-        MessageBoxA(nullptr, ex.what(), "例外エラー", MB_OK | MB_ICONERROR);
-        return -1;
-    }
-    catch (...) {
-        MessageBoxA(nullptr, "不明なエラーが発生しました。", "エラー", MB_OK | MB_ICONERROR);
-        return -1;
+        CoUninitialize();
+        return (int)msg.wParam;
+
+    } catch (...) {
+        MessageBoxA(nullptr,
+            "予期しないエラーが発生しました。\nアプリを再起動してください。",
+            "致命的エラー", MB_OK | MB_ICONERROR);
+        return 1;
     }
 }
